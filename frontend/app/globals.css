@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* "Modern Fresh" theme - crisp whites, a vivid sprout green, and a bright citrus
+   accent, in place of the old kraft-paper/nutrition-ticket palette. Token names are
+   kept stable (paper, ink, sprout, turmeric, clay, leaf-pale, line) so every component
+   that already references them via Tailwind utilities (bg-paper, text-ink, ...)
+   picks up the new theme automatically. */
+:root {
+  --paper: #fafbf7;
+  --paper-raised: #ffffff;
+  --ink: #16241c;
+  --ink-soft: #5c6b60;
+  --sprout: #1fa463;
+  --sprout-dark: #167a48;
+  --turmeric: #fdb93b;
+  --turmeric-dark: #e8991a;
+  --clay: #ef6b57;
+  --leaf-pale: #e1f5e8;
+  --line: #e7eae3;
+  --shadow-fresh: 0 1px 2px rgba(22, 36, 28, 0.04), 0 8px 24px rgba(22, 36, 28, 0.07);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-sprout: var(--sprout);
+  --color-sprout-dark: var(--sprout-dark);
+  --color-turmeric: var(--turmeric);
+  --color-turmeric-dark: var(--turmeric-dark);
+  --color-clay: var(--clay);
+  --color-leaf-pale: var(--leaf-pale);
+  --color-line: var(--line);
+  --font-display: var(--font-sora);
+  --font-sans: var(--font-public-sans);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Clean modern divider, replacing the old dashed "nutrition ticket" rule. */
+.ticket-rule {
+  border-top: 1px solid var(--line);
+}
+
+/* Soft elevation for cards - the "lifted" look that reads as modern rather than
+   the old flat-bordered, paper-ticket style. */
+.shadow-fresh {
+  box-shadow: var(--shadow-fresh);
+}
+
+::selection {
+  background: var(--sprout);
+  color: #ffffff;
+}

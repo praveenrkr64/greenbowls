@@ -1,0 +1,43 @@
+# --- Secrets: never commit. Real values live in Vercel env vars and the systemd unit on EC2.
+#
+# .admin_api_key_DO_NOT_COMMIT holds the LIVE production admin key - verified by calling
+# /api/admin/restaurant-info on the production host, which returned 200 with it. Anything
+# matching these patterns stays out of the repo, and the repo is public.
+.admin_api_key*
+*_DO_NOT_COMMIT*
+.env
+.env.local
+.env*.local
+**/application-local.properties
+
+# --- Runtime data: customer/menu images uploaded through the admin panel. These belong to the
+# running instance (EC2 keeps its own under /opt/cloudkitchen/uploads), not to source control.
+backend/uploads/
+
+# --- Build output
+target/
+.next/
+out/
+build/
+dist/
+*.jar
+*.war
+
+# --- Dependencies
+node_modules/
+
+# --- Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# --- Editor / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# --- Local tooling
+.vercel
+next-env.d.ts

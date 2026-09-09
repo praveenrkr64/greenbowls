@@ -1,0 +1,579 @@
+{
+  "info": {
+    "_postman_id": "b6e2d3a0-6c1a-4f2e-9c1a-cloudkitchen0001",
+    "name": "Cloud Kitchen API (AWS)",
+    "description": "End-to-end API tests for the Sprout & Bowl backend deployed on AWS (EC2 + RDS). Requests are ordered to run top-to-bottom via Postman's Collection Runner (or Newman) against a fresh/empty database - each 'Admin Setup' request captures the ids it creates into collection variables that later requests reuse. Swap `baseUrl` to `http://localhost:8080` to run the same collection against a local dev server.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://18-61-0-237.sslip.io", "type": "string" },
+    { "key": "adminApiKey", "value": "{{ADMIN_API_KEY}}", "type": "string" },
+    { "key": "customerPhone", "value": "9998887760", "type": "string" },
+    { "key": "cancelCustomerPhone", "value": "9998887761", "type": "string" },
+    { "key": "agentPhone", "value": "9998887771", "type": "string" },
+    { "key": "agentSecretKey", "value": "PMTEST1", "type": "string" },
+    { "key": "communityId", "value": "", "type": "string" },
+    { "key": "menuItemId", "value": "", "type": "string" },
+    { "key": "variantOptionId", "value": "", "type": "string" },
+    { "key": "deliveryAgentId", "value": "", "type": "string" },
+    { "key": "orderId", "value": "", "type": "string" },
+    { "key": "cancelOrderId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Public - Storefront",
+      "item": [
+        {
+          "name": "Get Menu",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns an array', () => Array.isArray(pm.response.json()));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/menu", "host": ["{{baseUrl}}"], "path": ["api", "menu"] }
+          }
+        },
+        {
+          "name": "Get Communities",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/communities", "host": ["{{baseUrl}}"], "path": ["api", "communities"] }
+          }
+        },
+        {
+          "name": "Get Restaurant Info",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has a name field', () => pm.response.json().name !== undefined);"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/restaurant-info", "host": ["{{baseUrl}}"], "path": ["api", "restaurant-info"] }
+          }
+        },
+        {
+          "name": "Get Promo Banner",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/promo-banner", "host": ["{{baseUrl}}"], "path": ["api", "promo-banner"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Admin Setup (seed test data)",
+      "item": [
+        {
+          "name": "Create Community",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+            "const json = pm.response.json();",
+            "pm.collectionVariables.set('communityId', json.id);",
+            "pm.test('Response has an id', () => json.id !== undefined);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Community\",\n  \"active\": true,\n  \"color\": \"#3b6ea5\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/admin/communities", "host": ["{{baseUrl}}"], "path": ["api", "admin", "communities"] }
+          }
+        },
+        {
+          "name": "List Communities (Admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/communities", "host": ["{{baseUrl}}"], "path": ["api", "admin", "communities"] }
+          }
+        },
+        {
+          "name": "Create Menu Item",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+            "const json = pm.response.json();",
+            "pm.collectionVariables.set('menuItemId', json.id);",
+            "pm.collectionVariables.set('variantOptionId', json.variantGroups[0].options[0].id);",
+            "pm.test('Has one variant group with one option', () => json.variantGroups.length === 1 && json.variantGroups[0].options.length === 2);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Bowl\",\n  \"description\": \"Created via Postman collection for API testing\",\n  \"basePrice\": 100.00,\n  \"category\": \"BOWL\",\n  \"imageUrl\": \"\",\n  \"active\": true,\n  \"sortOrder\": 99,\n  \"variantGroups\": [\n    {\n      \"name\": \"Choose your base\",\n      \"required\": true,\n      \"minSelect\": 1,\n      \"maxSelect\": 1,\n      \"sortOrder\": 1,\n      \"options\": [\n        { \"name\": \"Rice\", \"priceDelta\": 0, \"active\": true, \"sortOrder\": 1 },\n        { \"name\": \"Quinoa\", \"priceDelta\": 20, \"active\": true, \"sortOrder\": 2 }\n      ]\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/admin/menu", "host": ["{{baseUrl}}"], "path": ["api", "admin", "menu"] }
+          }
+        },
+        {
+          "name": "List Menu Items (Admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/menu", "host": ["{{baseUrl}}"], "path": ["api", "admin", "menu"] }
+          }
+        },
+        {
+          "name": "Update Menu Item Sort Order",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('sortOrder updated', () => pm.response.json().sortOrder === 1);"
+          ] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"sortOrder\": 1\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/menu/{{menuItemId}}/sort-order", "host": ["{{baseUrl}}"], "path": ["api", "admin", "menu", "{{menuItemId}}", "sort-order"] }
+          }
+        },
+        {
+          "name": "Create Delivery Agent",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+            "const json = pm.response.json();",
+            "pm.collectionVariables.set('deliveryAgentId', json.id);",
+            "pm.collectionVariables.set('agentPhone', json.phone);",
+            "pm.collectionVariables.set('agentSecretKey', json.secretKey);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Agent\",\n  \"phone\": \"{{agentPhone}}\",\n  \"secretKey\": \"{{agentSecretKey}}\",\n  \"active\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/admin/delivery-agents", "host": ["{{baseUrl}}"], "path": ["api", "admin", "delivery-agents"] }
+          }
+        },
+        {
+          "name": "List Delivery Agents (Admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/delivery-agents", "host": ["{{baseUrl}}"], "path": ["api", "admin", "delivery-agents"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Customer Order Flow",
+      "item": [
+        {
+          "name": "Create Order",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+            "const json = pm.response.json();",
+            "pm.collectionVariables.set('orderId', json.id);",
+            "pm.test('Status is NEW', () => json.status === 'NEW');",
+            "pm.test('Total amount is 120', () => json.totalAmount === 120.0);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Postman Test Customer\",\n  \"customerPhone\": \"{{customerPhone}}\",\n  \"communityId\": {{communityId}},\n  \"tower\": \"A\",\n  \"flatNumber\": \"101\",\n  \"notes\": \"Test order created via Postman\",\n  \"items\": [\n    {\n      \"menuItemId\": {{menuItemId}},\n      \"quantity\": 1,\n      \"selectedOptionIds\": [{{variantOptionId}}]\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Order id matches', () => pm.response.json().id == pm.collectionVariables.get('orderId'));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}"] }
+          }
+        },
+        {
+          "name": "Get Recent Orders by Phone",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Includes our test order', () => pm.response.json().some(o => o.id == pm.collectionVariables.get('orderId')));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/orders/recent?phone={{customerPhone}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "recent"], "query": [{ "key": "phone", "value": "{{customerPhone}}" }] }
+          }
+        },
+        {
+          "name": "Get Customer Profile by Phone",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200 (profile exists after first order)', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/customers/{{customerPhone}}/profile", "host": ["{{baseUrl}}"], "path": ["api", "customers", "{{customerPhone}}", "profile"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Admin Order Management",
+      "item": [
+        {
+          "name": "List Orders (Paginated)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has pagination fields', () => { const j = pm.response.json(); return j.content !== undefined && j.totalElements !== undefined; });"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/orders?filter=ALL&sortBy=newest&page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api", "orders"], "query": [
+              { "key": "filter", "value": "ALL" },
+              { "key": "sortBy", "value": "newest" },
+              { "key": "page", "value": "0" },
+              { "key": "size", "value": "20" }
+            ] }
+          }
+        },
+        {
+          "name": "Update Order Status -> CONFIRMED",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Order status is CONFIRMED', () => pm.response.json().status === 'CONFIRMED');"
+          ] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"CONFIRMED\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}", "status"] }
+          }
+        },
+        {
+          "name": "Update Order Status -> OUT_FOR_DELIVERY",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Order status is OUT_FOR_DELIVERY', () => pm.response.json().status === 'OUT_FOR_DELIVERY');"
+          ] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"OUT_FOR_DELIVERY\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}", "status"] }
+          }
+        },
+        {
+          "name": "Assign Delivery Agent to Order",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Agent assigned', () => pm.response.json().deliveryAgentId == pm.collectionVariables.get('deliveryAgentId'));"
+          ] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"agentId\": {{deliveryAgentId}}\n}" },
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}/assign-agent", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}", "assign-agent"] }
+          }
+        },
+        {
+          "name": "List Customers (Admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/customers", "host": ["{{baseUrl}}"], "path": ["api", "customers"] }
+          }
+        },
+        {
+          "name": "Get Customer's Recent Orders (Admin)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/customers/{{customerPhone}}/orders", "host": ["{{baseUrl}}"], "path": ["api", "customers", "{{customerPhone}}", "orders"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Delivery Agent Self-Service",
+      "item": [
+        {
+          "name": "Get Assigned Orders (correct key)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Includes our assigned order', () => pm.response.json().some(o => o.id == pm.collectionVariables.get('orderId')));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/orders/assigned?phone={{agentPhone}}&key={{agentSecretKey}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "assigned"], "query": [
+              { "key": "phone", "value": "{{agentPhone}}" },
+              { "key": "key", "value": "{{agentSecretKey}}" }
+            ] }
+          }
+        },
+        {
+          "name": "Mark Order Delivered",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Order status is DELIVERED', () => pm.response.json().status === 'DELIVERED');"
+          ] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{agentPhone}}\",\n  \"secretKey\": \"{{agentSecretKey}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/orders/{{orderId}}/deliver", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{orderId}}", "deliver"] }
+          }
+        },
+        {
+          "name": "Get Assigned Orders (now excludes delivered order)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Delivered order no longer listed', () => !pm.response.json().some(o => o.id == pm.collectionVariables.get('orderId')));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/orders/assigned?phone={{agentPhone}}&key={{agentSecretKey}}", "host": ["{{baseUrl}}"], "path": ["api", "orders", "assigned"], "query": [
+              { "key": "phone", "value": "{{agentPhone}}" },
+              { "key": "key", "value": "{{agentSecretKey}}" }
+            ] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Cancel Order Flow (independent order)",
+      "item": [
+        {
+          "name": "Create Order (for cancellation)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('cancelOrderId', pm.response.json().id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Postman Cancel Test\",\n  \"customerPhone\": \"{{cancelCustomerPhone}}\",\n  \"communityId\": {{communityId}},\n  \"tower\": \"B\",\n  \"flatNumber\": \"202\",\n  \"items\": [\n    {\n      \"menuItemId\": {{menuItemId}},\n      \"quantity\": 1,\n      \"selectedOptionIds\": [{{variantOptionId}}]\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Order status is CANCELLED', () => pm.response.json().status === 'CANCELLED');"
+          ] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{cancelCustomerPhone}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/orders/{{cancelOrderId}}/cancel", "host": ["{{baseUrl}}"], "path": ["api", "orders", "{{cancelOrderId}}", "cancel"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Admin Settings",
+      "item": [
+        {
+          "name": "Update Restaurant Info",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sprout & Bowl\",\n  \"phone\": \"+91 98765 43210\",\n  \"nameStyle\": \"\",\n  \"tagline\": \"Fresh bowls, delivered fast.\",\n  \"taglineStyle\": \"\",\n  \"heroImageUrl\": \"\",\n  \"eyebrowText\": \"Fresh - High-protein - Made to order\",\n  \"eyebrowStyle\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/admin/restaurant-info", "host": ["{{baseUrl}}"], "path": ["api", "admin", "restaurant-info"] }
+          }
+        },
+        {
+          "name": "Update Promo Banner",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Admin-Key", "value": "{{adminApiKey}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"enabled\": true,\n  \"message\": \"Tested via Postman!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/promo-banner", "host": ["{{baseUrl}}"], "path": ["api", "admin", "promo-banner"] }
+          }
+        },
+        {
+          "name": "Upload Media (Image)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+            "pm.test('Returns a URL', () => pm.response.json().url !== undefined);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "", "description": "Select a JPEG/PNG/WebP/GIF file here before sending - Postman can't pre-fill a file path portably across machines." }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/api/admin/uploads", "host": ["{{baseUrl}}"], "path": ["api", "admin", "uploads"] },
+            "description": "Attach an image file in the Body tab (form-data, key 'file') before sending."
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Auth & Validation Checks",
+      "item": [
+        {
+          "name": "Admin endpoint without X-Admin-Key -> 401",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/admin/communities", "host": ["{{baseUrl}}"], "path": ["api", "admin", "communities"] }
+          }
+        },
+        {
+          "name": "Admin endpoint with wrong X-Admin-Key -> 401",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Admin-Key", "value": "wrong-key-entirely" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/communities", "host": ["{{baseUrl}}"], "path": ["api", "admin", "communities"] }
+          }
+        },
+        {
+          "name": "Create order with invalid phone -> 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Bad Phone Test\",\n  \"customerPhone\": \"12345\",\n  \"communityId\": {{communityId}},\n  \"tower\": \"A\",\n  \"flatNumber\": \"101\",\n  \"items\": [ { \"menuItemId\": {{menuItemId}}, \"quantity\": 1, \"selectedOptionIds\": [{{variantOptionId}}] } ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/orders", "host": ["{{baseUrl}}"], "path": ["api", "orders"] }
+          }
+        },
+        {
+          "name": "Delivery agent with wrong secret key -> 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+            "pm.test('Generic error - no phone enumeration', () => pm.response.json().error === 'Invalid phone number or key');"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/orders/assigned?phone={{agentPhone}}&key=totally-wrong-key", "host": ["{{baseUrl}}"], "path": ["api", "orders", "assigned"], "query": [
+              { "key": "phone", "value": "{{agentPhone}}" },
+              { "key": "key", "value": "totally-wrong-key" }
+            ] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Cleanup (deactivate test data)",
+      "item": [
+        {
+          "name": "Deactivate Menu Item",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+          ] } }],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/menu/{{menuItemId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "menu", "{{menuItemId}}"] }
+          }
+        },
+        {
+          "name": "Deactivate Delivery Agent",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+          ] } }],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/delivery-agents/{{deliveryAgentId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "delivery-agents", "{{deliveryAgentId}}"] }
+          }
+        },
+        {
+          "name": "Deactivate Community",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+          ] } }],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Admin-Key", "value": "{{adminApiKey}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/communities/{{communityId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "communities", "{{communityId}}"] }
+          }
+        }
+      ]
+    }
+  ]
+}
