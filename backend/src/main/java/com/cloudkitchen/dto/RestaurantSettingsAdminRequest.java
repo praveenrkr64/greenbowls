@@ -44,6 +44,15 @@ public class RestaurantSettingsAdminRequest {
     @Max(value = 60000, message = "Rotation speed must be 60000 ms or less")
     private Integer heroRotationMs;
 
+    // --- SMTP, set from the admin panel so no server access is needed ---
+    @Size(max = 200) private String mailHost;
+    private Integer mailPort;
+    @Size(max = 200) private String mailUsername;
+    /** Write-only. Blank leaves the stored password untouched; use clearMailPassword to remove it. */
+    @Size(max = 400) private String mailPassword;
+    private Boolean clearMailPassword;
+    @Size(max = 200) private String mailFrom;
+
     @Size(max = 4000, message = "About us must be 4000 characters or fewer")
     private String aboutUs;
 
@@ -91,6 +100,24 @@ public class RestaurantSettingsAdminRequest {
 
     public Integer getHeroRotationMs() { return heroRotationMs; }
     public void setHeroRotationMs(Integer heroRotationMs) { this.heroRotationMs = heroRotationMs; }
+
+    public String getMailHost() { return mailHost; }
+    public void setMailHost(String mailHost) { this.mailHost = mailHost; }
+
+    public Integer getMailPort() { return mailPort; }
+    public void setMailPort(Integer mailPort) { this.mailPort = mailPort; }
+
+    public String getMailUsername() { return mailUsername; }
+    public void setMailUsername(String mailUsername) { this.mailUsername = mailUsername; }
+
+    public String getMailPassword() { return mailPassword; }
+    public void setMailPassword(String mailPassword) { this.mailPassword = mailPassword; }
+
+    public Boolean getClearMailPassword() { return clearMailPassword; }
+    public void setClearMailPassword(Boolean clearMailPassword) { this.clearMailPassword = clearMailPassword; }
+
+    public String getMailFrom() { return mailFrom; }
+    public void setMailFrom(String mailFrom) { this.mailFrom = mailFrom; }
 
     public String getAboutUs() { return aboutUs; }
     public void setAboutUs(String aboutUs) { this.aboutUs = aboutUs; }

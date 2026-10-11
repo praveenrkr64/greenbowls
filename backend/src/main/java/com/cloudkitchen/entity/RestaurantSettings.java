@@ -82,6 +82,27 @@ public class RestaurantSettings {
     @Column(length = 4000)
     private String aboutUs;
 
+    // --- SMTP, configurable from the admin panel ---
+    //
+    // These live here rather than only in environment variables because changing an env var
+    // means shell access to the server, and a home IP that rotates makes that unreliable. All
+    // nullable: they are added to an already-populated table, and empty simply means "fall back
+    // to whatever the deployment configured".
+    @Column(length = 200)
+    private String mailHost;
+
+    private Integer mailPort;
+
+    @Column(length = 200)
+    private String mailUsername;
+
+    /** A Gmail App Password, not an account password - revocable on its own. Never returned by the API. */
+    @Column(length = 400)
+    private String mailPassword;
+
+    @Column(length = 200)
+    private String mailFrom;
+
     // Shown in the confirm-order dialog, above the cart total. Configurable because what the
     // kitchen wants to promise at that moment ("we will call to confirm", payment terms,
     // cut-off times) changes without warning and should not need a deploy.
@@ -135,6 +156,21 @@ public class RestaurantSettings {
 
     public String getAboutUs() { return aboutUs; }
     public void setAboutUs(String aboutUs) { this.aboutUs = aboutUs; }
+
+    public String getMailHost() { return mailHost; }
+    public void setMailHost(String mailHost) { this.mailHost = mailHost; }
+
+    public Integer getMailPort() { return mailPort; }
+    public void setMailPort(Integer mailPort) { this.mailPort = mailPort; }
+
+    public String getMailUsername() { return mailUsername; }
+    public void setMailUsername(String mailUsername) { this.mailUsername = mailUsername; }
+
+    public String getMailPassword() { return mailPassword; }
+    public void setMailPassword(String mailPassword) { this.mailPassword = mailPassword; }
+
+    public String getMailFrom() { return mailFrom; }
+    public void setMailFrom(String mailFrom) { this.mailFrom = mailFrom; }
 
     public String getOrderConfirmMessage() { return orderConfirmMessage; }
     public void setOrderConfirmMessage(String orderConfirmMessage) { this.orderConfirmMessage = orderConfirmMessage; }

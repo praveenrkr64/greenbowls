@@ -3,6 +3,7 @@ import { getCategories, getHeroSlides, getMenu, getPromoBanners, getRestaurantIn
 import MenuCategoryAccordion from "@/components/MenuCategoryAccordion";
 import PromoBannerBar from "@/components/PromoBannerBar";
 import CartBar from "@/components/CartBar";
+import SubscriptionCard from "@/components/SubscriptionCard";
 import HeroSlider from "@/components/HeroSlider";
 import IdleMenuRefresh from "@/components/IdleMenuRefresh";
 import { Category, HeroSlide, MenuItem, PromoBanner, RestaurantInfo } from "@/lib/types";
@@ -206,6 +207,14 @@ export default async function MenuPage() {
       <div className="px-5 max-w-2xl mx-auto">
         <MenuCategoryAccordion menu={menu} categories={categories} />
       </div>
+
+      {/* Subscriptions sit after the menu: a customer scrolls the bowls first, and the plan
+          offer makes sense once they have seen what is on offer. mt-3 matches the space-y-3
+          between the category cards above, so this reads as the last card in that stack rather
+          than a detached block - it already shares their border/rounding/background. */}
+      <section className="px-5 mt-3 max-w-2xl mx-auto">
+        <SubscriptionCard />
+      </section>
 
       <section className="px-5 mt-10 max-w-2xl mx-auto">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-5 gap-x-3 bg-leaf-pale rounded-2xl p-5">

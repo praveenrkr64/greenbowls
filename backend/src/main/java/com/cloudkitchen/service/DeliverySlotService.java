@@ -132,7 +132,13 @@ public class DeliverySlotService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "End time must be after start time");
         }
-        slot.setLabel(request.getLabel().trim());
+        // The admin sets times only; the customer identifies a slot by its window. The column is
+        // NOT NULL on a populated table, so rather than migrate its nullability we keep filling it
+        // with the window itself. Any label an older client still sends is honoured.
+        String label = request.getLabel() == null ? "" : request.getLabel().trim();
+        slot.setLabel(label.isEmpty()
+                ? request.getStartTime() + " - " + request.getEndTime()
+                : label);
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
         slot.setMaxOrders(request.getMaxOrders());

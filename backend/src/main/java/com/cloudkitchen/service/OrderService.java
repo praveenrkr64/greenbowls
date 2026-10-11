@@ -1,5 +1,6 @@
 package com.cloudkitchen.service;
 
+import com.cloudkitchen.dto.CouponValidationResult;
 import com.cloudkitchen.dto.CreateOrderRequest;
 import com.cloudkitchen.dto.CustomerProfileDto;
 import com.cloudkitchen.dto.OrderResponse;
@@ -20,8 +21,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -41,6 +44,7 @@ public class OrderService {
     private final DeliveryAgentRepository deliveryAgentRepository;
     private final CustomerService customerService;
     private final EmailNotificationService emailNotificationService;
+    private final CouponService couponService;
     private final DeliverySlotService deliverySlotService;
     private final RestaurantSettingsService restaurantSettingsService;
     private final PushNotificationService pushNotificationService;
@@ -48,6 +52,7 @@ public class OrderService {
     public OrderService(OrderRepository orderRepository, MenuItemRepository menuItemRepository,
                          ApartmentCommunityRepository communityRepository, DeliveryAgentRepository deliveryAgentRepository,
                          CustomerService customerService, EmailNotificationService emailNotificationService,
+                         CouponService couponService,
                          DeliverySlotService deliverySlotService,
                          RestaurantSettingsService restaurantSettingsService,
                          PushNotificationService pushNotificationService) {
@@ -57,6 +62,7 @@ public class OrderService {
         this.deliveryAgentRepository = deliveryAgentRepository;
         this.customerService = customerService;
         this.emailNotificationService = emailNotificationService;
+        this.couponService = couponService;
         this.deliverySlotService = deliverySlotService;
         this.restaurantSettingsService = restaurantSettingsService;
         this.pushNotificationService = pushNotificationService;
@@ -84,6 +90,9 @@ public class OrderService {
         applyDeliveryChoice(order, request);
 
         BigDecimal orderTotal = BigDecimal.ZERO;
+        // Counted here so a coupon condition like "buy 2 salads" is judged on the items the
+        // server actually priced, not on anything the client claimed.
+        java.util.Map<String, Integer> quantityByCategory = new java.util.HashMap<>();
 
         for (CreateOrderRequest.OrderItemRequest itemReq : request.getItems()) {
             MenuItem menuItem = menuItemRepository.findById(itemReq.getMenuItemId())
@@ -133,6 +142,7 @@ public class OrderService {
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(orderItem.getQuantity()));
             orderItem.setLineTotal(lineTotal);
             orderTotal = orderTotal.add(lineTotal);
+            quantityByCategory.merge(menuItem.getCategory(), orderItem.getQuantity(), Integer::sum);
 
             order.getItems().add(orderItem);
         }
@@ -148,11 +158,34 @@ public class OrderService {
             }
         }
 
+        // Coupon. Re-evaluated here rather than trusting the checkout page's preview: the cart
+        // can change between previewing and submitting, and two tabs could otherwise spend the
+        // same code twice.
+        String couponToRedeem = null;
+        if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
+            CouponValidationResult coupon = couponService.evaluate(
+                    request.getCouponCode(), request.getCustomerPhone(), orderTotal, quantityByCategory);
+            if (!coupon.valid()) {
+                throw new IllegalArgumentException(coupon.reason());
+            }
+            // Best one wins rather than stacking: a first-time customer with a coupon should not
+            // silently get both. The coupon is left UNUSED when the welcome offer is larger, so
+            // it is still there for their next order.
+            if (coupon.discountAmount().compareTo(discountAmount) > 0) {
+                discountAmount = coupon.discountAmount();
+                discountReason = coupon.name() + " (" + coupon.code() + ")";
+                couponToRedeem = coupon.code();
+            }
+        }
+
         order.setSubtotalAmount(orderTotal);
         order.setDiscountAmount(discountAmount);
         order.setDiscountReason(discountReason);
         order.setTotalAmount(orderTotal.subtract(discountAmount));
         Order saved = orderRepository.save(order);
+        if (couponToRedeem != null) {
+            couponService.markUsed(couponToRedeem, saved.getId());
+        }
         OrderResponse response = toResponse(saved);
         emailNotificationService.notifyNewOrder(response);
         return response;
@@ -221,6 +254,11 @@ public class OrderService {
         OrderResponse response = toResponse(orderRepository.save(order));
         if (status == OrderStatus.DELIVERED) {
             emailNotificationService.notifyOrderDelivered(response);
+            // Reward the completed order. On DELIVERED rather than on placement, so an order
+            // that is placed and cancelled cannot be used to mint coupons.
+            if (previous != OrderStatus.DELIVERED) {
+                couponService.issueForDeliveredOrder(order.getCustomerPhone());
+            }
         }
         // Only on the TRANSITION into out-for-delivery, not on every save while already in it.
         // An admin who re-selects the same status, or edits the order afterwards, must not
@@ -230,6 +268,45 @@ public class OrderService {
             pushNotificationService.notifyOutForDelivery(order, restaurantSettingsService.getRestaurantName());
         }
         return response;
+    }
+
+    /**
+     * Admin applies a coupon to an EXISTING order, from the order screen.
+     *
+     * <p>This is the master-coupon path: a reusable, admin-only code the kitchen puts on whichever
+     * order it likes. The condition is re-checked against the items actually on the order, and the
+     * total is recomputed from the subtotal - never from the current total, or applying a second
+     * coupon would discount an already-discounted figure.
+     */
+    @Transactional
+    public OrderResponse applyCouponAsAdmin(Long orderId, String code) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        BigDecimal subtotal = order.getSubtotalAmount() != null
+                ? order.getSubtotalAmount() : order.getTotalAmount();
+
+        Map<String, Integer> quantityByCategory = new HashMap<>();
+        for (OrderItem item : order.getItems()) {
+            // menuItem can be null if the item was since deleted; the recorded line still counts
+            // toward the bill, it just cannot contribute to a category rule.
+            if (item.getMenuItem() != null) {
+                quantityByCategory.merge(item.getMenuItem().getCategory(), item.getQuantity(), Integer::sum);
+            }
+        }
+
+        CouponValidationResult result = couponService.evaluate(
+                code, order.getCustomerPhone(), subtotal, quantityByCategory, true);
+        if (!result.valid()) {
+            throw new IllegalArgumentException(result.reason());
+        }
+
+        order.setDiscountAmount(result.discountAmount());
+        order.setDiscountReason(result.name() + " (" + result.code() + ")");
+        order.setTotalAmount(subtotal.subtract(result.discountAmount()));
+        Order saved = orderRepository.save(order);
+        couponService.markUsed(result.code(), saved.getId());
+        return toResponse(saved);
     }
 
     // Customer self-service: cancelling requires the phone the order was placed under

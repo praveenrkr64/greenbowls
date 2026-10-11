@@ -27,6 +27,9 @@ public class CreateOrderRequest {
 
     private String notes;
 
+    /** Optional coupon code. Re-validated server-side; never trusted for its discount. */
+    private String couponCode;
+
     // Exactly one of these is expected: a slot id for a scheduled order, or expressDelivery
     // for a 20-minute one. Validation lives in OrderService, where the express toggle's
     // current value is known.
@@ -55,6 +58,9 @@ public class CreateOrderRequest {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getCouponCode() { return couponCode; }
+    public void setCouponCode(String couponCode) { this.couponCode = couponCode; }
 
     public List<OrderItemRequest> getItems() { return items; }
     public void setItems(List<OrderItemRequest> items) { this.items = items; }

@@ -173,6 +173,12 @@ export interface RestaurantInfo {
 // which the public /api/restaurant-info never returns.
 export interface RestaurantSettingsAdmin extends RestaurantInfo {
   adminEmail: string | null;
+  // SMTP, editable from the admin panel. The password is never returned - only whether one is set.
+  mailHost: string | null;
+  mailPort: number | null;
+  mailUsername: string | null;
+  mailFrom: string | null;
+  mailPasswordSet: boolean;
 }
 
 // One image in the rotating banner at the top of the menu page. Public view - only
@@ -250,4 +256,70 @@ export interface OrderResponse {
   deliverySlotWindow: string | null;
   expressDelivery: boolean;
   items: OrderItemResponse[];
+}
+
+// A customer asking to be called back about a weekly/monthly plan. Nothing is priced or
+// scheduled here - the kitchen agrees bowls, timings and price on the call.
+export type SubscriptionPlanType = "WEEKLY" | "MONTHLY";
+export type SubscriptionStatus = "NEW" | "CONTACTED" | "CLOSED";
+
+export interface SubscriptionRequest {
+  id: number;
+  customerName: string;
+  phone: string;
+  planType: SubscriptionPlanType;
+  status: SubscriptionStatus;
+  notes: string | null;
+  createdAt: string;
+}
+
+// --- Coupons -------------------------------------------------------------------------------
+export type CouponConditionType = "NONE" | "MIN_ORDER_TOTAL" | "MIN_CATEGORY_QUANTITY";
+
+/** The template the kitchen defines; issuing one mints a Coupon against a phone number. */
+export interface CouponType {
+  id: number;
+  name: string;
+  discountAmount: number;
+  conditionType: CouponConditionType;
+  minOrderTotal: number | null;
+  categoryName: string | null;
+  minQuantity: number | null;
+  validityDays: number;
+  autoIssueOnDelivery: boolean;
+  /** Master coupon: applies to any number of orders. Implies adminOnly. */
+  reusable: boolean;
+  /** Only the kitchen can apply it, from the order screen. */
+  adminOnly: boolean;
+  active: boolean;
+  description: string;
+}
+
+/** An issued coupon, belonging to one phone number. */
+export interface Coupon {
+  id: number;
+  code: string;
+  /** Null for a master coupon, which belongs to nobody. */
+  phone: string | null;
+  name: string;
+  discountAmount: number;
+  description: string;
+  issuedAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  usedOrderId: number | null;
+  reusable: boolean;
+  adminOnly: boolean;
+  timesUsed: number;
+  expired: boolean;
+}
+
+/** Always returned with HTTP 200 - a mistyped code is a normal outcome, not an error. */
+export interface CouponValidationResult {
+  valid: boolean;
+  code: string;
+  name: string | null;
+  description: string | null;
+  discountAmount: number | null;
+  reason: string | null;
 }

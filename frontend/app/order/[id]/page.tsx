@@ -92,7 +92,7 @@ export default function OrderConfirmationPage() {
         <div className="flex flex-col items-center justify-center px-6 text-center py-24">
           <p className="font-display text-2xl text-ink mb-2">Order placed!</p>
           <p className="text-ink-soft text-sm mb-6">
-            We&rsquo;ll call you shortly to confirm. Save this order number: #{params.id}
+            Save this order number: #{params.id}
           </p>
           <Link href="/" className="rounded-full bg-sprout text-paper-raised font-semibold px-6 py-3">
             Back to menu
@@ -108,9 +108,6 @@ export default function OrderConfirmationPage() {
       <div className="text-center pt-10 pb-6 px-5">
         <p className="font-mono text-xs uppercase tracking-widest text-sprout">Order confirmed</p>
         <h1 className="font-display text-3xl font-semibold text-ink mt-1">Thank you, {order.customerName.split(" ")[0]}!</h1>
-        <p className="text-ink-soft text-sm mt-2">
-          We&rsquo;ll call {order.customerPhone} shortly to confirm before we start cooking.
-        </p>
       </div>
 
       {/* The out-for-delivery banner is rendered app-wide by OrderAlertWatcher, not here.

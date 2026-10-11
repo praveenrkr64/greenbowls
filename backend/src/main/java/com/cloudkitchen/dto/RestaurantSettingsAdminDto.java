@@ -19,6 +19,12 @@ public record RestaurantSettingsAdminDto(
         // Banner rotation interval in ms; always populated, never null.
         Integer heroRotationMs,
         // Null or blank means the "Who we are" button is hidden.
+        String mailHost,
+        Integer mailPort,
+        String mailUsername,
+        String mailFrom,
+        /** Whether a password is stored. The password itself is never returned. */
+        boolean mailPasswordSet,
         String aboutUs,
         String orderConfirmMessage
 ) {}

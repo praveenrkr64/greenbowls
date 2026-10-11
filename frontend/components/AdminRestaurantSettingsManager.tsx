@@ -20,6 +20,13 @@ export default function AdminRestaurantSettingsManager() {
   const [expressDeliveryMinutes, setExpressDeliveryMinutes] = useState(20);
   const [orderConfirmMessage, setOrderConfirmMessage] = useState("");
   const [aboutUs, setAboutUs] = useState("");
+  const [mailHost, setMailHost] = useState("");
+  const [mailPort, setMailPort] = useState<number | "">("");
+  const [mailUsername, setMailUsername] = useState("");
+  const [mailFrom, setMailFrom] = useState("");
+  // Write-only: the server never sends the stored password back, it only says whether one exists.
+  const [mailPassword, setMailPassword] = useState("");
+  const [mailPasswordSet, setMailPasswordSet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +50,11 @@ export default function AdminRestaurantSettingsManager() {
         setExpressDeliveryMinutes(info.expressDeliveryMinutes || 20);
         setOrderConfirmMessage(info.orderConfirmMessage || "");
         setAboutUs(info.aboutUs || "");
+        setMailHost(info.mailHost || "");
+        setMailPort(info.mailPort ?? "");
+        setMailUsername(info.mailUsername || "");
+        setMailFrom(info.mailFrom || "");
+        setMailPasswordSet(info.mailPasswordSet);
       })
       .catch(() => setError("Couldn't load restaurant settings."))
       .finally(() => setLoading(false));
@@ -73,6 +85,12 @@ export default function AdminRestaurantSettingsManager() {
         expressDeliveryMinutes,
         orderConfirmMessage: orderConfirmMessage.trim(),
         aboutUs: aboutUs.trim(),
+        mailHost: mailHost.trim(),
+        mailPort: mailPort === "" ? null : Number(mailPort),
+        mailUsername: mailUsername.trim(),
+        mailFrom: mailFrom.trim(),
+        // Only sent when the admin actually typed one; blank leaves the stored one alone.
+        ...(mailPassword.trim() ? { mailPassword: mailPassword.trim() } : {}),
       });
       setName(updated.name);
       setPhone(updated.phone);
@@ -89,6 +107,8 @@ export default function AdminRestaurantSettingsManager() {
       setExpressDeliveryMinutes(updated.expressDeliveryMinutes || 20);
       setOrderConfirmMessage(updated.orderConfirmMessage || "");
       setAboutUs(updated.aboutUs || "");
+      setMailPasswordSet(updated.mailPasswordSet);
+      setMailPassword("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -218,6 +238,79 @@ export default function AdminRestaurantSettingsManager() {
           </div>
         </div>
       )}
+
+      {/* Email notifications. These live in the database rather than only in server environment
+          variables so they can be changed from here - editing an env var needs shell access to
+          the server, which a rotating home IP makes unreliable. */}
+      <div className="border-t border-line pt-3 mt-3 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">Email notifications</p>
+          <p className="text-[11px] text-ink-soft mt-0.5">
+            Sends you an email on every new order and every weekly/monthly plan request. For
+            Gmail use an App Password (needs 2-Step Verification), not your account password.
+            Anything set here overrides the server&rsquo;s own configuration.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-xs text-ink-soft block">
+            SMTP host
+            <input
+              value={mailHost}
+              onChange={(e) => setMailHost(e.target.value)}
+              placeholder="smtp.gmail.com"
+              className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
+            />
+          </label>
+          <label className="text-xs text-ink-soft block">
+            Port
+            <input
+              type="number"
+              value={mailPort}
+              onChange={(e) => setMailPort(e.target.value === "" ? "" : Number(e.target.value))}
+              placeholder="587"
+              className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
+            />
+          </label>
+        </div>
+
+        <label className="text-xs text-ink-soft block">
+          SMTP username (the sending address)
+          <input
+            value={mailUsername}
+            onChange={(e) => setMailUsername(e.target.value)}
+            placeholder="mrgreenbowls@gmail.com"
+            className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
+          />
+        </label>
+
+        <label className="text-xs text-ink-soft block">
+          App password
+          <input
+            type="password"
+            value={mailPassword}
+            onChange={(e) => setMailPassword(e.target.value)}
+            placeholder={mailPasswordSet ? "Saved - leave blank to keep it" : "16-character app password"}
+            autoComplete="new-password"
+            className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
+          />
+          <span className="text-[11px] text-ink-soft">
+            {mailPasswordSet
+              ? "A password is saved. It is never shown again - type a new one only to replace it."
+              : "No password saved yet, so no email is being sent."}
+          </span>
+        </label>
+
+        <label className="text-xs text-ink-soft block">
+          From address (optional - defaults to the username)
+          <input
+            value={mailFrom}
+            onChange={(e) => setMailFrom(e.target.value)}
+            placeholder="mrgreenbowls@gmail.com"
+            className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink"
+          />
+        </label>
+      </div>
 
       <label className="text-xs text-ink-soft block">
         Who we are (your story - shown on the About page)

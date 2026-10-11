@@ -2,6 +2,9 @@
 
 import { DeliveryAgentAdmin, OrderResponse } from "@/lib/types";
 import { formatPrice } from "@/lib/format";
+import { outForDeliveryWhatsAppLink } from "@/lib/whatsapp";
+import { applyCouponToOrder } from "@/lib/api";
+import { useState } from "react";
 
 export const STATUS_FLOW = ["NEW", "CONFIRMED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
@@ -43,9 +46,38 @@ interface OrderCardProps {
   onStatusChange: (id: number, status: string) => void;
   agents?: DeliveryAgentAdmin[];
   onAssignAgent?: (id: number, agentId: number | null) => void;
+  /** Used in the WhatsApp message so it reads as coming from the kitchen, not from nowhere. */
+  restaurantName?: string;
+  /** Called after a coupon is applied, so the list can pick up the new total. */
+  onOrderUpdated?: () => void;
 }
 
-export default function OrderCard({ order, onStatusChange, agents, onAssignAgent }: OrderCardProps) {
+export default function OrderCard({ order, onStatusChange, agents, onAssignAgent, restaurantName, onOrderUpdated }: OrderCardProps) {
+  const [couponCode, setCouponCode] = useState("");
+  const [applying, setApplying] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  async function handleApplyCoupon() {
+    if (!couponCode.trim()) return;
+    setApplying(true);
+    setCouponError(null);
+    try {
+      await applyCouponToOrder(order.id, couponCode.trim());
+      setCouponCode("");
+      onOrderUpdated?.();
+    } catch (e) {
+      setCouponError(e instanceof Error ? e.message : "Couldn't apply that coupon.");
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  // Only once the order is actually out for delivery - offering it earlier invites telling a
+  // customer their food has left when it has not.
+  const whatsAppLink =
+    order.status === "OUT_FOR_DELIVERY"
+      ? outForDeliveryWhatsAppLink(order, restaurantName || "our kitchen")
+      : null;
   return (
     <div
       className="bg-paper-raised border border-line rounded-2xl p-5 border-l-4"
@@ -132,6 +164,45 @@ export default function OrderCard({ order, onStatusChange, agents, onAssignAgent
             </option>
           ))}
         </select>
+      </div>
+
+      {whatsAppLink && (
+        <a
+          href={whatsAppLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-[#25D366] text-white font-semibold px-4 py-2 text-sm hover:brightness-95 transition"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true">
+            <path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.8 14.2c-.2.7-1.2 1.3-1.9 1.4-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.5-1.2-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.3.3c-.1.1-.3.3-.1.6.1.3.7 1.1 1.4 1.7.9.8 1.7 1.1 2 1.2.2.1.4.1.6-.1l.8-1c.2-.2.3-.2.6-.1l1.9.9c.3.1.4.2.5.3.1.2.1.6-.1 1.2Z" />
+          </svg>
+          WhatsApp customer
+        </a>
+      )}
+
+      {/* Staff-applied coupon. This is the master-coupon path: a reusable, admin-only code the
+          kitchen puts on whichever order it likes. Recomputed from the subtotal server-side. */}
+      <div className="mt-2">
+        <div className="flex items-center gap-2">
+          <input
+            value={couponCode}
+            onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(null); }}
+            placeholder="Apply coupon code"
+            className="flex-1 min-w-0 rounded-lg border border-line bg-paper px-3 py-1.5 text-sm text-ink font-mono uppercase"
+          />
+          <button
+            type="button"
+            onClick={handleApplyCoupon}
+            disabled={applying || !couponCode.trim()}
+            className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-soft disabled:opacity-50"
+          >
+            {applying ? "Applying..." : "Apply"}
+          </button>
+        </div>
+        {couponError && <p className="mt-1 text-xs text-clay">{couponError}</p>}
+        {order.discountReason && (
+          <p className="mt-1 text-xs text-sprout-dark">{order.discountReason}</p>
+        )}
       </div>
 
       {agents && onAssignAgent && (

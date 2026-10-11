@@ -1,6 +1,5 @@
 package com.cloudkitchen.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -9,7 +8,10 @@ import java.time.LocalTime;
 
 public class DeliverySlotAdminRequest {
 
-    @NotBlank(message = "Label is required")
+    // Optional now: the admin sets times only, and the slot is identified to the customer by
+    // its window ("12:00 - 13:00"). The column stays NOT NULL in the database, so the service
+    // fills it from the times when it is blank rather than risking a nullability migration on
+    // a populated table.
     @Size(max = 80, message = "Label must be 80 characters or fewer")
     private String label;
 

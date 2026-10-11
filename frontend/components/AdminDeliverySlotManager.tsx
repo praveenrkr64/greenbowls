@@ -11,7 +11,6 @@ import {
 import { DeliverySlotAdmin } from "@/lib/types";
 
 const EMPTY: DeliverySlotPayload = {
-  label: "",
   startTime: "12:00",
   endTime: "13:00",
   maxOrders: null,
@@ -49,7 +48,6 @@ export default function AdminDeliverySlotManager() {
   function startEdit(slot: DeliverySlotAdmin) {
     setEditingId(slot.id);
     setForm({
-      label: slot.label,
       startTime: toInputTime(slot.startTime),
       endTime: toInputTime(slot.endTime),
       maxOrders: slot.maxOrders,
@@ -89,7 +87,7 @@ export default function AdminDeliverySlotManager() {
   }
 
   async function handleDelete(slot: DeliverySlotAdmin) {
-    if (!confirm(`Delete the "${slot.label}" slot? Past orders keep their record of it.`)) return;
+    if (!confirm(`Delete the ${toInputTime(slot.startTime)} - ${toInputTime(slot.endTime)} slot? Past orders keep their record of it.`)) return;
     try {
       await deleteDeliverySlot(slot.id);
       await refresh();
@@ -116,16 +114,8 @@ export default function AdminDeliverySlotManager() {
 
       <form onSubmit={handleSave} className="bg-paper-raised border border-line rounded-2xl p-4 space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="block text-sm font-semibold text-ink mb-1">Label</label>
-            <input
-              required
-              value={form.label}
-              onChange={(e) => setForm({ ...form, label: e.target.value })}
-              placeholder="Lunch"
-              className="w-full rounded-xl border border-line px-3 py-2 text-ink"
-            />
-          </div>
+          {/* No Label field: a slot is identified by its window, and the customer only ever
+              sees the times. The backend fills the legacy label column from the times. */}
           <div>
             <label className="block text-sm font-semibold text-ink mb-1">From</label>
             <input
@@ -212,10 +202,7 @@ export default function AdminDeliverySlotManager() {
             >
               <div className="flex-1">
                 <p className="font-semibold text-ink">
-                  {slot.label}{" "}
-                  <span className="font-normal text-ink-soft">
-                    {toInputTime(slot.startTime)} - {toInputTime(slot.endTime)}
-                  </span>
+                  {toInputTime(slot.startTime)} - {toInputTime(slot.endTime)}
                 </p>
                 <p className="text-sm text-ink-soft mt-0.5">
                   {slot.ordersToday} order{slot.ordersToday === 1 ? "" : "s"} today

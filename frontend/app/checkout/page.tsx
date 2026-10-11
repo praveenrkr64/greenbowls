@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/format";
-import { createOrder, getCommunities, getCustomerProfile, getDeliverySlots, getRestaurantInfo } from "@/lib/api";
+import { createOrder, getCommunities, getCustomerProfile, getDeliverySlots, getRestaurantInfo, validateCoupon } from "@/lib/api";
 import Modal from "@/components/Modal";
-import { Community, DeliverySlot } from "@/lib/types";
+import { Community, CouponValidationResult, DeliverySlot } from "@/lib/types";
 import SiteHeader from "@/components/SiteHeader";
 
 // Same-device convenience: after a successful order, remember delivery details here
@@ -28,6 +28,9 @@ export default function CheckoutPage() {
   const { lines, subtotal, clearCart, hydrated } = useCart();
   const [communities, setCommunities] = useState<Community[]>([]);
   const [slots, setSlots] = useState<DeliverySlot[]>([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<CouponValidationResult | null>(null);
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
   // "express" is a sentinel rather than a slot id: express delivery is INSTEAD of a slot,
   // so it cannot be represented as one without inventing a fake row.
   const [deliveryChoice, setDeliveryChoice] = useState<string>("");
@@ -109,8 +112,13 @@ export default function CheckoutPage() {
     const phone = form.customerPhone;
     if (phone.length !== 10) return;
     if (lookedUpPhoneRef.current === phone) return;
-    if (form.customerName || form.tower || form.flatNumber) return;
     lookedUpPhoneRef.current = phone;
+    // The lookup now runs whatever else is filled in, because it decides WELCOME-OFFER
+    // ELIGIBILITY as well as autofill. Gating the whole thing on empty fields meant a customer
+    // who mistyped their number (marked new), then corrected it, kept a welcome offer they
+    // would not actually get - and the server would then charge a different total. Autofill
+    // itself is still only applied to fields the customer has not already set.
+    const fieldsAlreadySet = Boolean(form.customerName || form.tower || form.flatNumber);
     getCustomerProfile(phone)
       .then((profile) => {
         if (!profile) {
@@ -118,6 +126,10 @@ export default function CheckoutPage() {
           setIsNewCustomer(true);
           return;
         }
+        // Known customer: explicitly NOT new. Without this the flag stayed true from a
+        // previous phone and the preview promised a discount the backend would refuse.
+        setIsNewCustomer(false);
+        if (fieldsAlreadySet) return;
         setForm((f) => ({
           ...f,
           customerName: profile.name,
@@ -213,6 +225,8 @@ export default function CheckoutPage() {
         tower: form.tower,
         flatNumber: form.flatNumber,
         notes: form.notes || undefined,
+        // Only sent when it beats the welcome offer; otherwise it stays unused for next time.
+        couponCode: coupon?.valid && couponWins ? coupon.code : undefined,
         expressDelivery: deliveryChoice === "express",
         deliverySlotId: deliveryChoice && deliveryChoice !== "express" ? Number(deliveryChoice) : null,
         items: lines.map((l) => ({
@@ -243,9 +257,35 @@ export default function CheckoutPage() {
     }
   }
 
-  // Preview only - the backend independently verifies first-order eligibility and
-  // computes the authoritative discount, so this can't be gamed by tampering with the client.
-  const estimatedDiscount = isNewCustomer ? Math.round(Math.min(subtotal * 0.5, 100) * 100) / 100 : 0;
+  async function handleApplyCoupon() {
+    if (!couponCode.trim()) return;
+    if (!form.customerPhone.trim()) {
+      setCoupon({ valid: false, code: couponCode, name: null, description: null,
+                  discountAmount: null, reason: "Enter your phone number first - coupons belong to a number." });
+      return;
+    }
+    setCheckingCoupon(true);
+    try {
+      setCoupon(await validateCoupon({
+        code: couponCode.trim(),
+        phone: form.customerPhone.trim(),
+        items: lines.map((l) => ({ menuItemId: l.menuItem.id, quantity: l.quantity })),
+      }));
+    } catch {
+      setCoupon({ valid: false, code: couponCode, name: null, description: null,
+                  discountAmount: null, reason: "Couldn't check that coupon. Please try again." });
+    } finally {
+      setCheckingCoupon(false);
+    }
+  }
+
+  // Preview only - the backend independently verifies first-order eligibility, re-evaluates the
+  // coupon and computes the authoritative discount, so this can't be gamed by tampering with
+  // the client. Best-one-wins here mirrors what the server does, so the figure shown matches.
+  const welcomeDiscount = isNewCustomer ? Math.round(Math.min(subtotal * 0.5, 100) * 100) / 100 : 0;
+  const couponDiscount = coupon?.valid ? (coupon.discountAmount ?? 0) : 0;
+  const couponWins = couponDiscount > welcomeDiscount;
+  const estimatedDiscount = Math.max(welcomeDiscount, couponDiscount);
   const estimatedTotal = subtotal - estimatedDiscount;
 
   return (
@@ -333,76 +373,6 @@ export default function CheckoutPage() {
           <FieldError field="communityId" />
         </div>
 
-        {slots.length === 0 && !expressEnabled && (
-          <p className="text-sm text-clay bg-clay/10 border border-clay/30 rounded-xl px-4 py-3">
-            No delivery times are available right now, so orders cannot be placed. Please try
-            again shortly.
-          </p>
-        )}
-
-        {(slots.length > 0 || expressEnabled) && (
-          <div>
-            <label className="block text-sm font-semibold text-ink mb-1">
-              Delivery time <span className="text-clay">*</span>
-            </label>
-            <div
-              className="space-y-2 scroll-mt-24"
-              ref={(el) => { fieldRefs.current["deliveryChoice"] = el; }}
-            >
-              {expressEnabled && (
-                <label className="flex items-center gap-3 rounded-xl border border-sprout/40 bg-leaf-pale px-4 py-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="deliveryChoice"
-                    value="express"
-                    checked={deliveryChoice === "express"}
-                    onChange={(e) => setDeliveryChoice(e.target.value)}
-                    className="accent-sprout"
-                  />
-                  <span className="flex-1">
-                    <span className="font-semibold text-sprout-dark">Express delivery</span>
-                    <span className="block text-sm text-ink-soft">
-                      Delivered in about {expressMinutes} minutes
-                    </span>
-                  </span>
-                </label>
-              )}
-
-              {/* Unavailable slots are shown disabled rather than hidden. A customer whose
-                  usual 12:00 slot has simply passed or filled needs to see why it is gone,
-                  not a silently shorter list. */}
-              {slots.map((slot) => (
-                <label
-                  key={slot.id}
-                  className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${
-                    slot.available
-                      ? "border-line bg-paper-raised cursor-pointer"
-                      : "border-line/60 bg-paper opacity-60 cursor-not-allowed"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="deliveryChoice"
-                    value={String(slot.id)}
-                    disabled={!slot.available}
-                    checked={deliveryChoice === String(slot.id)}
-                    onChange={(e) => setDeliveryChoice(e.target.value)}
-                    className="accent-sprout"
-                  />
-                  <span className="flex-1">
-                    <span className="font-semibold text-ink">{slot.label}</span>
-                    <span className="block text-sm text-ink-soft">
-                      {slot.startTime.slice(0, 5)} - {slot.endTime.slice(0, 5)}
-                      {slot.unavailableReason ? ` - ${slot.unavailableReason}` : ""}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <FieldError field="deliveryChoice" />
-          </div>
-        )}
-
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold text-ink mb-1">Tower / Block</label>
@@ -430,6 +400,121 @@ export default function CheckoutPage() {
           </div>
         </div>
 
+        {/* Coupon goes directly after the address, as asked. Codes belong to a phone number,
+            so the field leans on the number entered above rather than asking for it again. */}
+        <div>
+          <label className="block text-sm font-semibold text-ink mb-1">
+            Coupon code <span className="text-ink-soft font-normal">(optional)</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={couponCode}
+              onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCoupon(null); }}
+              placeholder="e.g. GBAE79V2"
+              autoCapitalize="characters"
+              className="flex-1 rounded-xl border border-line bg-paper px-3 py-2 text-ink font-mono uppercase"
+            />
+            <button
+              type="button"
+              onClick={handleApplyCoupon}
+              disabled={checkingCoupon || !couponCode.trim()}
+              className="shrink-0 rounded-xl bg-ink text-paper-raised font-semibold px-4 py-2 text-sm disabled:opacity-50"
+            >
+              {checkingCoupon ? "Checking..." : "Apply"}
+            </button>
+          </div>
+          {coupon && coupon.valid && (
+            <p className="mt-1 text-sm text-sprout-dark">
+              {coupon.name} applied &mdash; {formatPrice(coupon.discountAmount ?? 0)} off.
+              {!couponWins && " Your welcome offer saves you more, so we have kept this coupon for next time."}
+            </p>
+          )}
+          {coupon && !coupon.valid && <p className="mt-1 text-sm text-clay">{coupon.reason}</p>}
+        </div>
+
+        {/* Delivery time sits at the END of the address form, directly above Notes: the
+            customer fills in where it goes, then when. Rendered as a grid rather than a stacked
+            list because there are several windows and a column of full-width rows pushed Notes
+            and the Place order button off the first screen. */}
+        {slots.length === 0 && !expressEnabled && (
+          <p className="text-sm text-clay bg-clay/10 border border-clay/30 rounded-xl px-4 py-3">
+            No delivery times are available right now, so orders cannot be placed. Please try
+            again shortly.
+          </p>
+        )}
+
+        {(slots.length > 0 || expressEnabled) && (
+          <div>
+            <label className="block text-sm font-semibold text-ink mb-1">
+              Delivery time <span className="text-clay">*</span>
+            </label>
+            <div
+              className="scroll-mt-24 space-y-2"
+              ref={(el) => { fieldRefs.current["deliveryChoice"] = el; }}
+            >
+              {expressEnabled && (
+                /* One compact row, sized like the slot tiles below it. Still full width and
+                   still tinted, because express is an ALTERNATIVE to picking a window rather
+                   than one of the windows - shrinking it into the grid would hide that. */
+                <label className="flex items-center gap-2 rounded-lg border border-sprout/40 bg-leaf-pale px-2 py-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="deliveryChoice"
+                    value="express"
+                    checked={deliveryChoice === "express"}
+                    onChange={(e) => setDeliveryChoice(e.target.value)}
+                    className="accent-sprout h-3.5 w-3.5 shrink-0"
+                  />
+                  <span className="text-[11px] font-semibold text-sprout-dark leading-tight">
+                    Express delivery
+                  </span>
+                  <span className="text-[11px] text-ink-soft leading-tight">
+                    ~{expressMinutes} min
+                  </span>
+                </label>
+              )}
+
+              {/* Unavailable slots are shown disabled rather than hidden. A customer whose
+                  usual 12:00 slot has simply passed or filled needs to see why it is gone,
+                  not a silently shorter list. */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {slots.map((slot) => (
+                  <label
+                    key={slot.id}
+                    title={slot.unavailableReason || undefined}
+                    className={`relative flex flex-col items-center justify-center rounded-lg border px-1 py-1.5 text-center transition-colors ${
+                      !slot.available
+                        ? "border-line/60 bg-paper opacity-60 cursor-not-allowed"
+                        : deliveryChoice === String(slot.id)
+                          ? "border-sprout bg-leaf-pale cursor-pointer"
+                          : "border-line bg-paper-raised hover:border-sprout/60 cursor-pointer"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deliveryChoice"
+                      value={String(slot.id)}
+                      disabled={!slot.available}
+                      checked={deliveryChoice === String(slot.id)}
+                      onChange={(e) => setDeliveryChoice(e.target.value)}
+                      className="sr-only"
+                    />
+                    {/* Times only - the slot has no name any more - and on ONE line, so a tile is
+                        a single row of text rather than a stacked block. */}
+                    <span className="font-semibold text-ink text-[11px] leading-tight whitespace-nowrap">
+                      {slot.startTime.slice(0, 5)}-{slot.endTime.slice(0, 5)}
+                    </span>
+                    {!slot.available && slot.unavailableReason && (
+                      <span className="text-[9px] text-clay leading-tight">{slot.unavailableReason}</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <FieldError field="deliveryChoice" />
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-semibold text-ink mb-1">
             Notes <span className="text-ink-soft font-normal">(optional)</span>
@@ -447,14 +532,16 @@ export default function CheckoutPage() {
 
       <div className="fixed bottom-4 left-0 right-0 px-5">
         <div className="max-w-lg mx-auto bg-paper-raised border border-line rounded-2xl shadow-fresh px-5 py-4">
-          {isNewCustomer && estimatedDiscount > 0 && (
+          {estimatedDiscount > 0 && (
             <>
               <div className="flex items-center justify-between mb-1 text-sm">
                 <span className="text-ink-soft">Subtotal</span>
                 <span className="font-mono text-ink-soft">{formatPrice(subtotal)}</span>
               </div>
               <div className="flex items-center justify-between mb-2 text-sm">
-                <span className="text-sprout-dark">Welcome offer (50% off, up to &#8377;100)</span>
+                <span className="text-sprout-dark">
+                  {couponWins ? `${coupon?.name} (${coupon?.code})` : "Welcome offer (50% off, up to ₹100)"}
+                </span>
                 <span className="font-mono text-sprout-dark">&minus;{formatPrice(estimatedDiscount)}</span>
               </div>
             </>

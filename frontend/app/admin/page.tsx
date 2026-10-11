@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { assignDeliveryAgent, getAdminDeliveryAgents, getOrders, updateOrderStatus } from "@/lib/api";
+import { assignDeliveryAgent, getAdminDeliveryAgents, getOrders, getRestaurantInfo, updateOrderStatus } from "@/lib/api";
 import { DeliveryAgentAdmin, OrderResponse } from "@/lib/types";
 import AdminMenuManager from "@/components/AdminMenuManager";
 import AdminCategoryManager from "@/components/AdminCategoryManager";
@@ -11,12 +11,14 @@ import AdminCustomerManager from "@/components/AdminCustomerManager";
 import AdminCommunityManager from "@/components/AdminCommunityManager";
 import AdminDeliveryAgentManager from "@/components/AdminDeliveryAgentManager";
 import AdminPromoBannerManager from "@/components/AdminPromoBannerManager";
+import AdminSubscriptionManager from "@/components/AdminSubscriptionManager";
+import AdminCouponManager from "@/components/AdminCouponManager";
 import AdminHeroSlideManager from "@/components/AdminHeroSlideManager";
 import AdminRestaurantSettingsManager from "@/components/AdminRestaurantSettingsManager";
 import OrderCard, { STATUS_FLOW, STATUS_LABEL } from "@/components/OrderCard";
 import { BellIcon } from "@/components/icons";
 
-const TABS = ["orders", "menu", "categories", "slots", "costs", "customers", "communities", "deliveryAgents", "settings"] as const;
+const TABS = ["orders", "menu", "categories", "slots", "subscriptions", "coupons", "costs", "customers", "communities", "deliveryAgents", "settings"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
@@ -24,6 +26,8 @@ const TAB_LABEL: Record<Tab, string> = {
   menu: "Menu",
   categories: "Categories",
   slots: "Slots",
+  subscriptions: "Plans",
+  coupons: "Coupons",
   costs: "Costs",
   customers: "Customers",
   communities: "Communities",
@@ -36,6 +40,8 @@ const NEW_ORDER_CHECK_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function AdminOrdersPage() {
   const [tab, setTab] = useState<Tab>("orders");
+  // Only used to word the WhatsApp message ("your Green Bowls order #12 is out for delivery").
+  const [restaurantName, setRestaurantName] = useState("");
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -62,6 +68,10 @@ export default function AdminOrdersPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    getRestaurantInfo().then((i) => setRestaurantName(i.name)).catch(() => setRestaurantName(""));
+  }, []);
 
   useEffect(() => {
     load();
@@ -291,6 +301,10 @@ export default function AdminOrdersPage() {
 
       {tab === "slots" && <AdminDeliverySlotManager />}
 
+      {tab === "subscriptions" && <AdminSubscriptionManager />}
+
+      {tab === "coupons" && <AdminCouponManager />}
+
       {tab === "costs" && <AdminExpenseManager />}
 
       {tab === "customers" && <AdminCustomerManager />}
@@ -363,6 +377,8 @@ export default function AdminOrdersPage() {
                     onStatusChange={handleStatusChange}
                     agents={agents.filter((a) => a.active)}
                     onAssignAgent={handleAssignAgent}
+                    restaurantName={restaurantName}
+                    onOrderUpdated={() => load()}
                   />
                 </div>
               );

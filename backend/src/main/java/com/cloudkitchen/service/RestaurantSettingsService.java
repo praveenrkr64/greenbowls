@@ -65,7 +65,8 @@ public class RestaurantSettingsService {
                 .orElse(new RestaurantSettingsAdminDto(
                         defaultName, defaultPhone, null, defaultTagline, null, null, defaultEyebrowText, null,
                         false, defaultFeatureBadgesText, defaultAdminEmail,
-                        false, DEFAULT_EXPRESS_MINUTES, DEFAULT_HERO_ROTATION_MS, null, DEFAULT_CONFIRM_MESSAGE
+                        false, DEFAULT_EXPRESS_MINUTES, DEFAULT_HERO_ROTATION_MS,
+                        null, null, null, null, false, null, DEFAULT_CONFIRM_MESSAGE
                 ));
     }
 
@@ -104,6 +105,21 @@ public class RestaurantSettingsService {
                 .map(RestaurantSettings::getHeroImageUrl)
                 .filter(url -> url != null && !url.isBlank())
                 .orElse(null);
+    }
+
+    /** The SMTP settings an admin saved, or null when none are stored. */
+    public record MailSettings(String host, Integer port, String username, String password, String from) {
+        public boolean isConfigured() {
+            return host != null && !host.isBlank();
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public MailSettings getMailSettings() {
+        return restaurantSettingsRepository.findById(RestaurantSettings.SINGLETON_ID)
+                .map(s -> new MailSettings(s.getMailHost(), s.getMailPort(), s.getMailUsername(),
+                        s.getMailPassword(), s.getMailFrom()))
+                .orElse(new MailSettings(null, null, null, null, null));
     }
 
     @Transactional(readOnly = true)
@@ -146,6 +162,18 @@ public class RestaurantSettingsService {
         // string means "clear it", which blankToNull turns back into null.
         if (request.getAboutUs() != null) {
             settings.setAboutUs(blankToNull(request.getAboutUs()));
+        }
+        // Null means "not sent"; empty string clears. The PASSWORD is special: blank means
+        // "leave the stored one alone", because the admin form never receives it back to resend.
+        if (request.getMailHost() != null) settings.setMailHost(blankToNull(request.getMailHost()));
+        if (request.getMailPort() != null) settings.setMailPort(request.getMailPort());
+        if (request.getMailUsername() != null) settings.setMailUsername(blankToNull(request.getMailUsername()));
+        if (request.getMailFrom() != null) settings.setMailFrom(blankToNull(request.getMailFrom()));
+        if (request.getMailPassword() != null && !request.getMailPassword().isBlank()) {
+            settings.setMailPassword(request.getMailPassword().trim());
+        }
+        if (request.getClearMailPassword() != null && request.getClearMailPassword()) {
+            settings.setMailPassword(null);
         }
         if (request.getOrderConfirmMessage() != null) {
             settings.setOrderConfirmMessage(blankToNull(request.getOrderConfirmMessage()));
@@ -196,6 +224,9 @@ public class RestaurantSettingsService {
                         ? s.getExpressDeliveryMinutes() : DEFAULT_EXPRESS_MINUTES,
                 s.getHeroRotationMs() != null && s.getHeroRotationMs() > 0
                         ? s.getHeroRotationMs() : DEFAULT_HERO_ROTATION_MS,
+                                s.getMailHost(), s.getMailPort(), s.getMailUsername(), s.getMailFrom(),
+                // Only whether one exists - the password itself never leaves the server.
+                s.getMailPassword() != null && !s.getMailPassword().isBlank(),
                 s.getAboutUs(),
                 s.getOrderConfirmMessage() != null && !s.getOrderConfirmMessage().isBlank()
                         ? s.getOrderConfirmMessage() : DEFAULT_CONFIRM_MESSAGE

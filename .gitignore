@@ -41,3 +41,7 @@ Thumbs.db
 # --- Local tooling
 .vercel
 next-env.d.ts
+
+# Local dev-server launch config for Claude Code. Machine-specific absolute paths,
+# nothing the project needs.
+.claude/

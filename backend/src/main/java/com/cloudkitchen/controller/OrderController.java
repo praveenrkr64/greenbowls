@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -90,6 +91,14 @@ public class OrderController {
     }
 
     // Admin-facing: assign (or unassign, with a null agentId) a delivery agent to this order.
+    /** Admin applies a (normally reusable, admin-only) coupon to an existing order. */
+    @PatchMapping("/{id}/apply-coupon")
+    public OrderResponse applyCoupon(@PathVariable Long id, @RequestBody Map<String, String> body,
+                                      @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {
+        requireAdmin(adminKey);
+        return orderService.applyCouponAsAdmin(id, body.get("code"));
+    }
+
     @PatchMapping("/{id}/assign-agent")
     public OrderResponse assignAgent(@PathVariable Long id, @RequestBody AssignDeliveryAgentRequest request,
                                       @RequestHeader(value = "X-Admin-Key", required = false) String adminKey) {

@@ -1,4 +1,4 @@
-import { Category, Community, HeroSlide, HeroSlideAdmin, CommunityAdmin, Customer, CustomerProfile, DeliveryAgentAdmin, DeliverySlot, DeliverySlotAdmin, Expense, ExpenseSummary, MenuItem, MenuItemAdmin, OrderResponse, PageResponse, PromoBanner, PromoBannerAdmin, RestaurantInfo, RestaurantSettingsAdmin } from "./types";
+import { Category, Community, Coupon, CouponType, CouponValidationResult, HeroSlide, HeroSlideAdmin, SubscriptionRequest, CommunityAdmin, Customer, CustomerProfile, DeliveryAgentAdmin, DeliverySlot, DeliverySlotAdmin, Expense, ExpenseSummary, MenuItem, MenuItemAdmin, OrderResponse, PageResponse, PromoBanner, PromoBannerAdmin, RestaurantInfo, RestaurantSettingsAdmin } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
@@ -97,6 +97,13 @@ export interface RestaurantInfoPayload {
   heroRotationMs?: number;
   orderConfirmMessage: string;
   aboutUs?: string;
+  mailHost?: string;
+  mailPort?: number | null;
+  mailUsername?: string;
+  /** Write-only. Blank leaves the stored password unchanged. */
+  mailPassword?: string;
+  clearMailPassword?: boolean;
+  mailFrom?: string;
 }
 
 export function updateRestaurantInfo(payload: RestaurantInfoPayload): Promise<RestaurantSettingsAdmin> {
@@ -209,6 +216,8 @@ export interface CreateOrderPayload {
   tower: string;
   flatNumber: string;
   notes?: string;
+  /** Optional; the server re-validates it and may ignore it if the welcome offer is larger. */
+  couponCode?: string;
   items: {
     menuItemId: number;
     quantity: number;
@@ -225,7 +234,8 @@ export function getAdminDeliverySlots(): Promise<DeliverySlotAdmin[]> {
 }
 
 export interface DeliverySlotPayload {
-  label: string;
+  // Optional: the server fills the legacy label column from the times when it is absent.
+  label?: string;
   startTime: string;
   endTime: string;
   maxOrders: number | null;
@@ -514,5 +524,125 @@ export function markOrderDelivered(orderId: number, phone: string, secretKey: st
   return request<OrderResponse>(`/api/orders/${orderId}/deliver`, {
     method: "PATCH",
     body: JSON.stringify({ phone, secretKey }),
+  });
+}
+
+// --- Subscription call-back requests -------------------------------------------------------
+// Creating one is public (a customer asking to be rung); the rest is admin-only.
+
+export interface SubscriptionRequestPayload {
+  customerName: string;
+  phone: string;
+  planType: "WEEKLY" | "MONTHLY";
+}
+
+export function createSubscriptionRequest(
+  payload: SubscriptionRequestPayload,
+): Promise<SubscriptionRequest> {
+  return request<SubscriptionRequest>("/api/subscription-requests", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getSubscriptionRequests(): Promise<SubscriptionRequest[]> {
+  return request<SubscriptionRequest[]>("/api/admin/subscription-requests", { headers: adminHeaders });
+}
+
+export function updateSubscriptionRequest(
+  id: number,
+  payload: { status?: string; notes?: string },
+): Promise<SubscriptionRequest> {
+  return request<SubscriptionRequest>(`/api/admin/subscription-requests/${id}`, {
+    method: "PUT",
+    headers: adminHeaders,
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteSubscriptionRequest(id: number): Promise<void> {
+  return request<void>(`/api/admin/subscription-requests/${id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+}
+
+// --- Coupons ---------------------------------------------------------------------------------
+
+/** Public: previews a code against the cart. The server re-prices the cart from the database. */
+export function validateCoupon(payload: {
+  code: string;
+  phone: string;
+  items: { menuItemId: number; quantity: number }[];
+}): Promise<CouponValidationResult> {
+  return request<CouponValidationResult>("/api/coupons/validate", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface CouponTypePayload {
+  name: string;
+  reusable?: boolean;
+  adminOnly?: boolean;
+  discountAmount: number;
+  conditionType: "NONE" | "MIN_ORDER_TOTAL" | "MIN_CATEGORY_QUANTITY";
+  minOrderTotal?: number | null;
+  categoryName?: string | null;
+  minQuantity?: number | null;
+  validityDays: number;
+  autoIssueOnDelivery: boolean;
+  active?: boolean;
+}
+
+export function getCouponTypes(): Promise<CouponType[]> {
+  return request<CouponType[]>("/api/admin/coupon-types", { headers: adminHeaders });
+}
+
+export function createCouponType(payload: CouponTypePayload): Promise<CouponType> {
+  return request<CouponType>("/api/admin/coupon-types", {
+    method: "POST", headers: adminHeaders, body: JSON.stringify(payload),
+  });
+}
+
+export function updateCouponType(id: number, payload: CouponTypePayload): Promise<CouponType> {
+  return request<CouponType>(`/api/admin/coupon-types/${id}`, {
+    method: "PUT", headers: adminHeaders, body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCouponType(id: number): Promise<void> {
+  return request<void>(`/api/admin/coupon-types/${id}`, { method: "DELETE", headers: adminHeaders });
+}
+
+export function getCoupons(phone?: string): Promise<Coupon[]> {
+  const q = phone ? `?phone=${encodeURIComponent(phone)}` : "";
+  return request<Coupon[]>(`/api/admin/coupons${q}`, { headers: adminHeaders });
+}
+
+/** Admin check of a single code. Empty array means no coupon with that code exists. */
+export function lookupCoupon(code: string): Promise<Coupon[]> {
+  return request<Coupon[]>(`/api/admin/coupons?code=${encodeURIComponent(code)}`, {
+    headers: adminHeaders,
+  });
+}
+
+/** phone is omitted for a master coupon, which belongs to nobody. */
+export function issueCoupon(payload: { couponTypeId: number; phone?: string }): Promise<Coupon> {
+  return request<Coupon>("/api/admin/coupons", {
+    method: "POST", headers: adminHeaders, body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCoupon(id: number): Promise<void> {
+  return request<void>(`/api/admin/coupons/${id}`, { method: "DELETE", headers: adminHeaders });
+}
+
+/** Admin-only: put a coupon on an existing order. Used for reusable master coupons. */
+export function applyCouponToOrder(orderId: number, code: string): Promise<OrderResponse> {
+  return request<OrderResponse>(`/api/orders/${orderId}/apply-coupon`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ code }),
   });
 }

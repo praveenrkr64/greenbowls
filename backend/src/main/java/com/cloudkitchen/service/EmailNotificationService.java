@@ -58,6 +58,19 @@ public class EmailNotificationService {
         send("New order #" + order.id() + " - " + order.customerName(), body);
     }
 
+    /**
+     * A weekly/monthly plan request. Worth an email of its own: unlike an order it has no
+     * kitchen workflow behind it, so if nobody opens the Plans tab it is simply never actioned.
+     */
+    @Async
+    public void notifySubscriptionRequest(String customerName, String phone, String planType) {
+        String plan = "WEEKLY".equalsIgnoreCase(planType) ? "weekly" : "monthly";
+        String body = customerName + " (" + phone + ") has asked about a " + plan + " plan.\n\n"
+                + "Call them to agree the bowls, delivery timings and price, then record what you\n"
+                + "settled on in the Plans tab of the admin panel.";
+        send("New " + plan + " plan request - " + customerName, body);
+    }
+
     @Async
     public void notifyOrderDelivered(OrderResponse order) {
         String body = "Order #" + order.id() + " has been marked delivered.\n\n"
@@ -82,6 +95,17 @@ public class EmailNotificationService {
 
     private void send(String subject, String body) {
         String to = restaurantSettingsService.getAdminNotificationEmail();
+
+        // Settings saved in the admin panel win over the deployment's environment variables.
+        // Changing an env var needs shell access to the server, which a rotating home IP makes
+        // unreliable; the admin panel is always reachable.
+        RestaurantSettingsService.MailSettings stored = restaurantSettingsService.getMailSettings();
+        String host = stored.isConfigured() ? stored.host() : this.host;
+        int port = stored.isConfigured() && stored.port() != null ? stored.port() : this.port;
+        String username = stored.isConfigured() ? stored.username() : this.username;
+        String password = stored.isConfigured() ? stored.password() : this.password;
+        String from = stored.isConfigured() ? stored.from() : this.from;
+
         if (host == null || host.isBlank()) {
             log.debug("Email notification skipped - SMTP not configured");
             return;
